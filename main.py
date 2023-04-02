@@ -1,7 +1,11 @@
 import cv2
 import gspread
+import tkinter as tk
 from oauth2client.service_account import ServiceAccountCredentials
 import time
+from PIL import Image
+from PIL import ImageTk
+import imutils
 
 def credenciales():
     # Define las credenciales y autoriza el cliente
@@ -17,7 +21,6 @@ def credenciales():
 def cargar_imagen(intervalo, umbral):
     # Carga la imagen de la cámara
     #camara = cv2.VideoCapture(0)
-
     imagen = cv2.imread("imagen.PNG")
 
     # Convierte la imagen a escala de grises y aplica un filtro Gaussiano
@@ -30,7 +33,8 @@ def cargar_imagen(intervalo, umbral):
     # Realiza una operación de dilatación para unir las áreas de píxeles blancos que puedan estar separados
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     umbralizada = cv2.dilate(umbralizada, kernel, iterations=2)
-    detectar_contornos(imagen, umbralizada, intervalo, umbral)
+    md, mo = detectar_contornos(imagen, umbralizada, intervalo, umbral)
+    return md, mo
 
 
 def detectar_contornos(imagen, umbralizada, intervalo, umbral):
@@ -52,12 +56,26 @@ def detectar_contornos(imagen, umbralizada, intervalo, umbral):
     for mesa in mesas:
         x, y, w, h = cv2.boundingRect(mesa)
         cv2.rectangle(imagen, (x, y), (x + w, y + h), (0, 0, 255), 2)
-        area = w * h
-        if area > 1000:
+        rect_area = cv2.contourArea(mesa)
+        cv2.putText(imagen,str(rect_area),(x,y),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),3)
+        #area = w * h
+        if rect_area < 40000:
             mesas_ocupadas += 1
         else:
             mesas_disponibles += 1
 
+    # Mostrar en tkinter
+    im = Image.fromarray(imagen)
+    img = ImageTk.PhotoImage(image=im)
+    lblOutputImage.configure(image=img)
+    lblOutputImage.image = img
+    return mesas_disponibles, mesas_ocupadas
+
+def finalizar():
+    # Boton agregado para rellenar
+    pass
+
+def capturar(mesas_disponibles, mesas_ocupadas):
     # Obtiene la fecha y hora actual
     fecha_hora = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -66,22 +84,30 @@ def detectar_contornos(imagen, umbralizada, intervalo, umbral):
     hoja = credenciales()
     hoja.append_row(datos)
 
-    # Espera el tiempo definido en el intervalo antes de tomar la siguiente imagen
-    time.sleep(intervalo)
 
-    # Muestra la imagen con los rectángulos de las mesas
-    cv2.imshow("Mesas de la cafetería", imagen)
+# Define el intervalo de tiempo en segundos para enviar los datos
+intervalo = 10
+# Define el umbral para la umbralización de la imagen
+umbral = 200
 
-    
+#Ventana para el Tkinter
+root = tk.Tk()
+main = tk.Frame(root)
+main.pack()
+lblOutputImage = tk.Label(main)
+lblOutputImage.grid(column=1, row=1, columnspan=2)
 
-if __name__ == "__main__":
-    # Define el intervalo de tiempo en segundos para enviar los datos
-    intervalo = 10
-    # Define el umbral para la umbralización de la imagen
-    umbral = 200
-    cargar_imagen(intervalo, umbral)
-    cv2.waitKey()
-    cv2.destroyAllWindows()
+#Cargar el video
+md, mo = cargar_imagen(intervalo, umbral)
 
+# Botones
+btnFinalizar = tk.Button(main, text="Finalizar", width=28, command=finalizar)
+btnFinalizar.grid(column=1, row=0, padx=5, pady=5)
+
+btnCapturar = tk.Button(main, text="Capturar imagen", width=28, command=capturar(md, mo))
+btnCapturar.grid(column=2, row=0, padx=5, pady=5)
+
+
+root.mainloop()
 
 
