@@ -21,15 +21,15 @@ def credenciales():
 def cargar_imagen(intervalo, umbral):
     # Carga la imagen de la cámara
     #camara = cv2.VideoCapture(0)
-    imagen = cv2.imread("imagen.PNG")
+    imagen = cv2.imread("imagen2.PNG")
 
     # Convierte la imagen a escala de grises y aplica un filtro Gaussiano
     gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
     gris = cv2.GaussianBlur(gris, (5, 5), 0)
-
+    blur = cv2.medianBlur(gris, 5)
     # Aplica la umbralización para detectar los objetos blancos
     _, umbralizada = cv2.threshold(gris, umbral, 255, cv2.THRESH_BINARY)
-
+    #umbralizada = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
     # Realiza una operación de dilatación para unir las áreas de píxeles blancos que puedan estar separados
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     umbralizada = cv2.dilate(umbralizada, kernel, iterations=2)
@@ -71,7 +71,8 @@ def detectar_contornos(imagen, umbralizada, intervalo, umbral):
             x, y, w, h = cv2.boundingRect(contorno)
             # Ordenar coordenadas
             coordenadas = np.array(ordenar_puntos(aprox))
-            crop = umbralizada[y:y+h, x:x+w]
+            crop = imagen[y:y+h, x:x+w]
+            th = umbralizada[y:y+h, x:x+w]
             # Impresión de ubicación de mesas
             cv2.rectangle(imagen, (x, y), (x + w, y + h), (0, 0, 255), 2)
             cv2.putText(imagen,str(rect_area),(x,y),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),3)
@@ -84,13 +85,12 @@ def detectar_contornos(imagen, umbralizada, intervalo, umbral):
             cv2.circle(imagen, (coordenadas[6], coordenadas[7]), 5, (0, 255, 0), -1) #Verde
 
             # recorte de las mesas
-            recut(crop, rect_area, contador)
-            contador+=1
-
-            if rect_area < 40000:
-                mesas_ocupadas += 1
-            else:
+            if recut(crop, th, rect_area, contador):
                 mesas_disponibles += 1
+            else:
+                mesas_ocupadas += 1
+                
+            contador+=1
 
     # Mostrar en tkinter
     im = Image.fromarray(imagen)
@@ -112,7 +112,28 @@ def capturar(mesas_disponibles, mesas_ocupadas):
     hoja = credenciales()
     hoja.append_row(datos)
 
-def recut(imagen, area, nombre):
+def recut(imagen, th, area, nombre):
+    # busqueda de cosas
+    tarea = 0
+    contours, hierarchy = cv2.findContours(th, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        s_area = cv2.contourArea(contour)
+        if s_area < area:
+            tarea = tarea + s_area
+            cv2.rectangle(imagen, (x,y), (x+w, y+h), (0,255,0), 2)
+    area = area*0.01
+    if tarea < area:
+        cv2.putText(imagen,f"Desocupada",(30,30),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
+        return True
+    else:   
+        cv2.putText(imagen,f"Ocupado",(30,30),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
+        return False
+
+    cv2.drawContours(imagen, contours, -1, (0,255,0), 3)
+    print(area)
+    print(tarea)
+    
     cv2.imshow(str(nombre), imagen)
 
 
