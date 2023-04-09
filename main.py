@@ -89,7 +89,7 @@ def detectar_contornos(imagen, umbralizada, intervalo, umbral):
                 mesas_disponibles += 1
             else:
                 mesas_ocupadas += 1
-                
+
             contador+=1
 
     # Mostrar en tkinter
@@ -156,7 +156,7 @@ md, mo = cargar_imagen(intervalo, umbral)
 btnFinalizar = tk.Button(main, text="Finalizar", width=28, command=finalizar)
 btnFinalizar.grid(column=1, row=0, padx=5, pady=5)
 
-btnCapturar = tk.Button(main, text="Capturar imagen", width=28, command=capturar(md, mo))
+btnCapturar = tk.Button(main, text="Capturar imagen", width=28, command=lambda: capturar(md, mo))
 btnCapturar.grid(column=2, row=0, padx=5, pady=5)
 
 
