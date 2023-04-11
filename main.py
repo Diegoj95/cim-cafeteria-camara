@@ -28,7 +28,7 @@ def toggle_camera():
 
 
 # Boton que activa y desactiva la camara
-camera_button = tk.Button(root, text="Mostrar Cámara", command=toggle_camera)
+camera_button = tk.Button(root, text="Apagar Camara", command=toggle_camera)
 camera_button.pack()
 
 def credenciales():
