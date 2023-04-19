@@ -1,3 +1,4 @@
+# Liberias necesarias
 import cv2
 import numpy as np
 import tkinter as tk
@@ -6,35 +7,39 @@ import time
 import gspread
 from PIL import Image, ImageTk
 # Libreria para trabajar con hilos, para que la ventana 
-# no se congele al sacar la ventana secundaria
+# no se congele al desplegar la ventana secundaria
 #import threading
 
 # Ventana de tkinter
 root = tk.Tk()
+# Titulo de la ventana
 root.title("Analizador de Mesas")
+# Umbral que se implementará en el thresholding
 umbral = 150
-
+# Variable para el boton de encender/apagar camara
 show_camera = True
 
-# Activar y desactivar la camara
+# Función para activar y desactivar la camara
 def toggle_camera():
     global show_camera
     show_camera = not show_camera
     if show_camera:
         camera_button.config(text="Apagar camara")
-
     else:
         camera_button.config(text="Mostrar camara")
 
 
-# Boton que activa y desactiva la camara
+# Definición del boton que activa y desactiva la camara
 camera_button = tk.Button(root, text="Apagar Camara", command=toggle_camera)
+# Poner el boton en la ventana
 camera_button.pack()
 
+# Función para conectar google sheets a través de credenciales
 def credenciales():
     # Define las credenciales y autoriza el cliente
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    credenciales = ServiceAccountCredentials.from_json_keyfile_name("cim-cafeteria-camara\cim-cafeteria-camara\gs_credentials.json", scope)
+    # En caso de error, cambiar la ruta relativa del archivo .json
+    credenciales = ServiceAccountCredentials.from_json_keyfile_name("gs_credentials.json", scope)
     cliente = gspread.authorize(credenciales)
     # Abre la hoja de cálculo
     hoja_calculo = cliente.open("DatosCafeteria")
@@ -42,7 +47,7 @@ def credenciales():
     hoja = hoja_calculo.worksheet("Sheet1")
     return hoja
 
-# Ordenar puntos
+# Función para ordenar las esquinas de las mesas
 def sort_points(puntos):
     n_puntos = np.concatenate([puntos[0], puntos[1], puntos[2], puntos[3]]).tolist()
 
@@ -59,6 +64,7 @@ def sort_points(puntos):
 
     return [x1_order[0], x1_order[1], x2_order[0], x2_order[1]]
 
+# Función donde se recorta cada mesa y se analiza dentro de estas si hay objetos encima de este
 def recrop(imagen, th, area, a, b):
     # busqueda de cosas
     tarea = 0
@@ -66,11 +72,14 @@ def recrop(imagen, th, area, a, b):
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
         s_area = cv2.contourArea(contour)
+        # Si el area del objeto es menor que el area de la mesa
         if s_area < area:
+            # Se suma el area del objeto encontrado y se le dibuja un contorno
             tarea = tarea + s_area
             cv2.rectangle(imagen, (x+a,y+b), (x+w+a, y+h+b), (0,255,0), 2)
 
-    area = area*0.01
+    # Se ve si el area total de los objetos es menor al 10% del area de la mesa
+    area = area*0.1
     if tarea < area:
         cv2.putText(imagen,f"Desocupada",(x+a,y+b),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
         return True, imagen
@@ -85,7 +94,9 @@ def capture():
 
     # Convertir el video a escala de grises y aplicar el filtro Canny
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Linea para aplicar un filtro de difuminación (opcional)
     #gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Aplicación del threshold
     _, thresh = cv2.threshold(gray, umbral, 255, cv2.THRESH_BINARY)
 
     # Operación de dilatación para juntar bordes
@@ -98,7 +109,7 @@ def capture():
     # Crear una copia del video para dibujar los contornos
     output = frame.copy()
 
-    # Contar el número de mesas ocupadas y desocupadas
+    # Variables que contienen el número de mesas ocupadas y desocupadas
     occupied_tables = 0
     unoccupied_tables = 0
 
@@ -108,18 +119,12 @@ def capture():
         #Calculo de puntos en la imagen y area
         approx = cv2.approxPolyDP(contour, 0.02*perimiter, True)
         area = cv2.contourArea(contour)
-
+        # Si hay un contorno de 4 lados y con un area superior a 1000 pixeles se considera mesa
         if len(approx) == 4 and area > 1000:
-            #rect = cv2.minAreaRect(contour)
-            #box = cv2.boxPoints(rect)
-            #box = np.int0(box)
-            #cv2.drawContours(output,contour,0,(0,0,255),2)
-
-            # Analizar si la mesa está ocupada o desocupada
             x, y, w, h = cv2.boundingRect(contour)
-
             # Ordenar coordenadas
             coordinates = np.array(sort_points(approx))
+            # Extracción de la zona de las mesas en el frame
             table = frame[y:y+h, x:x+w]
             table_thresh = thresh[y:y+h, x:x+w]
             
@@ -127,13 +132,15 @@ def capture():
             cv2.rectangle(output, (x, y), (x+w, y+h), (0,0,255), 2)
             cv2.putText(output,str(area),(x,y),cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),3)
 
-            #Impresión de puntos
+            #Impresión de puntos ya ordenados
             coordinates = coordinates.ravel()
             cv2.circle(output, (coordinates[0], coordinates[1]), 5, (255, 60, 51), -1) #Rojo
             cv2.circle(output, (coordinates[2], coordinates[3]), 5, (51, 51, 255), -1) #Azul
             cv2.circle(output, (coordinates[4], coordinates[5]), 5, (0, 243, 255), -1) #Celeste
             cv2.circle(output, (coordinates[6], coordinates[7]), 5, (0, 255, 0), -1) #Verde
 
+            # Variable dispo es para ver la disponibilidad de la mesa y la variable output
+            # es la actualización del frame con los dibujos de las manchas
             dispo, output = recrop(output, table_thresh, area, x, y)
             if dispo:
                 unoccupied_tables += 1
@@ -149,7 +156,7 @@ def capture():
     hoja.append_row(datos)
     
     # Mostrar el video con los contornos de los rectángulos
-    cv2.imshow("MEsa thresh", thresh)
+    cv2.imshow("Mesa thresh", thresh)
     cv2.imshow("Mesa Analizada", output)
     cv2.waitKey(0)
 
@@ -157,14 +164,18 @@ def capture():
     print("Mesas Ocupadas: ", occupied_tables)
     print("Mesas Desocupadas: ", unoccupied_tables)
 
+    # Lineas opcionales para el manejo de hilos
     # hilos
     # analysis_finished = True
 
+# Boton para capturar el frame a analizar
 capture_button = tk.Button(root, text="Capturar Video", command=capture)
 capture_button.pack()
 
+# Camara a utilizar, 0 es la camara default
 cap = cv2.VideoCapture(0)
 
+# Función para mostrar la camara en la ventana
 def show_frame():
     global show_camera
     if show_camera:
@@ -181,7 +192,7 @@ def show_frame():
             label.config(image=photo)
             label.image = photo
 
-    # Manejo de hilos
+    # Manejo de hilos (Opcional)
     #if capture_pressed:
     #    capture_pressed = False
     #    analysis_finished = False
@@ -201,6 +212,7 @@ def show_frame():
     #    result_label = tk.Label(results_window, text="Mesas Ocupadas: " + str(occupied_tables) + "\nMesas Desocupadas: " + str(unoccupied_tables))
     #    result_label.pack()
 
+    # Actualización del frame cada 10 milisegundos
     root.after(10, show_frame)
 
 label = tk.Label(root)
